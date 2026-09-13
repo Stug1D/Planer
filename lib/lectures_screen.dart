@@ -29,7 +29,19 @@ class _LecturesScreenState extends State<LecturesScreen> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-
+            ElevatedButton.icon(
+              onPressed: () {
+                // TODO: Funktion für den Button
+              },
+              icon: Icon(Icons.add),
+              label: Text('Fach hinzufügen'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {},
+              icon: Icon(Icons.edit),
+              label: Text('Fach bearbeiten'),
+            ),
+            const SizedBox(height: 16),
             // GridView (Kacheln) muss wie ListView in ein Expanded gewickelt werden
             Expanded(
               child: GridView.count(
