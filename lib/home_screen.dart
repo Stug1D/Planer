@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_application_1/Models/models.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -16,10 +18,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // 1. Zugriff auf die in main.dart geöffneten Hive-Boxen
+  final Box<Task> _taskBox = Hive.box<Task>('tasks_box');
+  final Box<Exam> _examBox = Hive.box<Exam>('exams_box');
+
   bool _showAllTasks = false;
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+
+  final TextEditingController _taskController = TextEditingController();
+  final TextEditingController _examController = TextEditingController();
 
   // Theme-bewusste Hilfsfunktion für gut lesbare Warnfarben
   Color _getExamColor(
@@ -35,51 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (daysLeft <= 10) {
-      // 🔴 Unter 10 Tage: Dunkelrot (Dark Mode) vs. Hellrot (Light Mode)
       return isDark ? const Color(0xFF4A1515) : Colors.red.shade100;
     } else if (daysLeft <= 30) {
-      // 🟡 Unter 30 Tage: Dunkelocker (Dark Mode) vs. Hellgelb (Light Mode)
       return isDark ? const Color(0xFF4A3B15) : Colors.yellow.shade100;
     }
     return defaultColor;
   }
 
-  // 1. Aufgaben-Liste
-  final List<Task> tasks = [
-    Task(
-      title: 'Complete Assignment',
-      dueDate: DateTime.now().add(const Duration(days: 2, hours: 4)),
-    ),
-    Task(
-      title: 'Study for Exam',
-      dueDate: DateTime.now().add(const Duration(days: 5, hours: 2)),
-    ),
-    Task(
-      title: 'Group Project Meeting',
-      dueDate: DateTime.now().add(const Duration(days: 1, hours: 1)),
-    ),
-  ];
-
-  // 2. Klausuren-Liste
-  final List<Exam> exams = [
-    Exam(
-      module: 'Mathematics',
-      date: DateTime.now().add(const Duration(days: 10, hours: 3)),
-    ),
-    Exam(
-      module: 'Physics',
-      date: DateTime.now().add(const Duration(days: 15, hours: 5)),
-    ),
-    Exam(
-      module: 'Chemistry',
-      date: DateTime.now().add(const Duration(days: 20, hours: 2)),
-    ),
-  ];
-
-  final TextEditingController _taskController = TextEditingController();
-  final TextEditingController _examController = TextEditingController();
-
-  // --- DIALOG: NEUE AUFGABE HINZUFÜGEN (INKL. UHRZEIT) ---
+  // NEUE AUFGABE HINZUFÜGEN
   void _showAddTaskDialog() async {
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
 
@@ -155,14 +127,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ElevatedButton(
                   onPressed: () {
                     if (_taskController.text.isNotEmpty) {
-                      setState(() {
-                        tasks.add(
-                          Task(
-                            title: _taskController.text,
-                            dueDate: selectedDate,
-                          ),
-                        );
-                      });
+                      // Speichern in Hive!
+                      _taskBox.add(
+                        Task(
+                          title: _taskController.text,
+                          dueDate: selectedDate,
+                        ),
+                      );
                       _taskController.clear();
                       Navigator.pop(context);
                     }
@@ -177,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- DIALOG: NEUE KLAUSUR HINZUFÜGEN (INKL. UHRZEIT) ---
+  // NEUE KLAUSUR HINZUFÜGEN
   void _showAddExamDialog() async {
     DateTime selectedDate = DateTime.now().add(const Duration(days: 7));
 
@@ -253,14 +224,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ElevatedButton(
                   onPressed: () {
                     if (_examController.text.isNotEmpty) {
-                      setState(() {
-                        exams.add(
-                          Exam(
-                            module: _examController.text,
-                            date: selectedDate,
-                          ),
-                        );
-                      });
+                      // Speichern in Hive!
+                      _examBox.add(
+                        Exam(
+                          module: _examController.text,
+                          date: selectedDate,
+                        ),
+                      );
                       _examController.clear();
                       Navigator.pop(context);
                     }
@@ -297,22 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    tasks.sort((a, b) {
-      if (a.isCompleted != b.isCompleted) {
-        return a.isCompleted ? 1 : -1;
-      }
-      return a.dueDate.compareTo(b.dueDate);
-    });
-
-    exams.sort((a, b) {
-      if (a.isCompleted != b.isCompleted) {
-        return a.isCompleted ? 1 : -1;
-      }
-      return a.date.compareTo(b.date);
-    });
-
-    final displayedTasks = _showAllTasks ? tasks : tasks.take(5).toList();
-
     final Color cardColor = Theme.of(context).brightness == Brightness.dark
         ? Colors.grey[850]!
         : Colors.grey[200]!;
@@ -343,94 +297,116 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            // Kalender
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: TableCalendar(
-                  firstDay: DateTime.utc(2024, 1, 1),
-                  lastDay: DateTime.utc(2030, 12, 31),
-                  focusedDay: _focusedDay,
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                  onDaySelected: (selectedDay, focusedDay) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
-                    });
-                  },
-                  headerStyle: HeaderStyle(
-                    formatButtonVisible: false,
-                    titleCentered: true,
-                    titleTextStyle: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  calendarStyle: CalendarStyle(
-                    todayDecoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    todayTextStyle: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    selectedDecoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    outsideDaysVisible: false,
-                  ),
-                  calendarBuilders: CalendarBuilders(
-                    markerBuilder: (context, date, events) {
-                      final hasTask = _hasTaskOnDay(date, tasks);
-                      final hasExam = _hasExamOnDay(date, exams);
+            // Kalender mit Hive-Daten
+            ValueListenableBuilder(
+              valueListenable: _taskBox.listenable(),
+              builder: (context, Box<Task> taskBox, _) {
+                return ValueListenableBuilder(
+                  valueListenable: _examBox.listenable(),
+                  builder: (context, Box<Exam> examBox, _) {
+                    final currentTasks = taskBox.values.toList();
+                    final currentExams = examBox.values.toList();
 
-                      if (!hasTask && !hasExam) return const SizedBox();
+                    return Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: TableCalendar(
+                          firstDay: DateTime.utc(2024, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay,
+                          selectedDayPredicate: (day) =>
+                              isSameDay(_selectedDay, day),
+                          onDaySelected: (selectedDay, focusedDay) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+                          },
+                          headerStyle: HeaderStyle(
+                            formatButtonVisible: false,
+                            titleCentered: true,
+                            titleTextStyle: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                          calendarStyle: CalendarStyle(
+                            todayDecoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer,
+                              shape: BoxShape.circle,
+                            ),
+                            todayTextStyle: TextStyle(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            selectedDecoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            outsideDaysVisible: false,
+                          ),
+                          calendarBuilders: CalendarBuilders(
+                            markerBuilder: (context, date, events) {
+                              final hasTask =
+                                  _hasTaskOnDay(date, currentTasks);
+                              final hasExam =
+                                  _hasExamOnDay(date, currentExams);
 
-                      return Positioned(
-                        bottom: 6,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (hasTask)
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 1.5,
+                              if (!hasTask && !hasExam) {
+                                return const SizedBox();
+                              }
+
+                              return Positioned(
+                                bottom: 6,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (hasTask)
+                                      Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 1.5,
+                                        ),
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.blueAccent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    if (hasExam)
+                                      Container(
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 1.5,
+                                        ),
+                                        width: 6,
+                                        height: 6,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.redAccent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Colors.blueAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            if (hasExam)
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 1.5,
-                                ),
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: Colors.redAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
+                              );
+                            },
+                          ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
 
             const SizedBox(height: 24),
 
-            // Bereich 1: Aufgaben
+            // Bereich 1: Aufgaben (Hive ValueListenableBuilder)
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
@@ -451,61 +427,94 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
 
-            for (var task in displayedTasks)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: ListTile(
-                  tileColor: cardColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  leading: Icon(
-                    task.isCompleted
-                        ? Icons.check_circle
-                        : Icons.circle_outlined,
-                    color: task.isCompleted ? Colors.green : Colors.grey,
-                  ),
-                  title: Text(
-                    task.title,
-                    style: TextStyle(
-                      decoration: task.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Frist: ${task.dueDate.day}.${task.dueDate.month}.${task.dueDate.year} um ${task.formattedTime} Uhr',
-                  ),
-                  onTap: () {
-                    setState(() {
-                      task.isCompleted = !task.isCompleted;
-                    });
-                  },
-                ),
-              ),
+            ValueListenableBuilder<Box<Task>>(
+              valueListenable: _taskBox.listenable(),
+              builder: (context, box, _) {
+                final tasks = box.values.toList();
 
-            if (tasks.length > 5)
-              TextButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _showAllTasks = !_showAllTasks;
-                  });
-                },
-                icon: Icon(
-                  _showAllTasks
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                ),
-                label: Text(
-                  _showAllTasks
-                      ? 'Weniger anzeigen'
-                      : 'Alle ${tasks.length} Aufgaben anzeigen',
-                ),
-              ),
+                // Sortierung
+                tasks.sort((a, b) {
+                  if (a.isCompleted != b.isCompleted) {
+                    return a.isCompleted ? 1 : -1;
+                  }
+                  return a.dueDate.compareTo(b.dueDate);
+                });
+
+                if (tasks.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Keine Aufgaben vorhanden.'),
+                  );
+                }
+
+                final displayedTasks =
+                    _showAllTasks ? tasks : tasks.take(5).toList();
+
+                return Column(
+                  children: [
+                    for (var task in displayedTasks)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: ListTile(
+                          tileColor: cardColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          leading: Icon(
+                            task.isCompleted
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            color:
+                                task.isCompleted ? Colors.green : Colors.grey,
+                          ),
+                          title: Text(
+                            task.title,
+                            style: TextStyle(
+                              decoration: task.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Frist: ${task.dueDate.day}.${task.dueDate.month}.${task.dueDate.year} um ${task.formattedTime} Uhr',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.grey),
+                            onPressed: () => task.delete(), // Aus Hive löschen!
+                          ),
+                          onTap: () {
+                            task.isCompleted = !task.isCompleted;
+                            task.save(); // Änderung in Hive speichern!
+                          },
+                        ),
+                      ),
+                    if (tasks.length > 5)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _showAllTasks = !_showAllTasks;
+                          });
+                        },
+                        icon: Icon(
+                          _showAllTasks
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                        ),
+                        label: Text(
+                          _showAllTasks
+                              ? 'Weniger anzeigen'
+                              : 'Alle ${tasks.length} Aufgaben anzeigen',
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
 
             const SizedBox(height: 24),
 
-            // Bereich 2: Klausuren
+            // Bereich 2: Klausuren (Hive ValueListenableBuilder)
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
@@ -523,78 +532,74 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
 
-            for (var exam in exams)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: ListTile(
-                  tileColor: exam.isCompleted
-                      ? cardColor
-                      : _getExamColor(exam.date, cardColor, context),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  leading: Icon(
-                    exam.isCompleted ? Icons.check_circle : Icons.school,
-                    color: exam.isCompleted ? Colors.green : Colors.red,
-                  ),
-                  title: Text(
-                    exam.module,
-                    style: TextStyle(
-                      decoration: exam.isCompleted
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Datum: ${exam.date.day}.${exam.date.month}.${exam.date.year} um ${exam.formattedTime} Uhr - Tage bis zur Klausur: ${exam.date.difference(DateTime.now()).inDays}',
-                  ),
-                  onTap: () {
-                    setState(() {
-                      exam.isCompleted = !exam.isCompleted;
-                    });
-                  },
-                ),
-              ),
+            ValueListenableBuilder<Box<Exam>>(
+              valueListenable: _examBox.listenable(),
+              builder: (context, box, _) {
+                final exams = box.values.toList();
+
+                // Sortierung
+                exams.sort((a, b) {
+                  if (a.isCompleted != b.isCompleted) {
+                    return a.isCompleted ? 1 : -1;
+                  }
+                  return a.date.compareTo(b.date);
+                });
+
+                if (exams.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('Keine Klausuren eingetragen.'),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (var exam in exams)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: ListTile(
+                          tileColor: exam.isCompleted
+                              ? cardColor
+                              : _getExamColor(exam.date, cardColor, context),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          leading: Icon(
+                            exam.isCompleted
+                                ? Icons.check_circle
+                                : Icons.school,
+                            color:
+                                exam.isCompleted ? Colors.green : Colors.red,
+                          ),
+                          title: Text(
+                            exam.module,
+                            style: TextStyle(
+                              decoration: exam.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Datum: ${exam.date.day}.${exam.date.month}.${exam.date.year} um ${exam.formattedTime} Uhr - Tage bis zur Klausur: ${exam.date.difference(DateTime.now()).inDays}',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline,
+                                color: Colors.grey),
+                            onPressed: () => exam.delete(), // Aus Hive löschen!
+                          ),
+                          onTap: () {
+                            exam.isCompleted = !exam.isCompleted;
+                            exam.save(); // Änderung in Hive speichern!
+                          },
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
     );
-  }
-}
-
-// Datenmodelle mit formatierten Uhrzeit-Gettern
-class Task {
-  final String title;
-  final DateTime dueDate;
-  bool isCompleted;
-
-  Task({
-    required this.title,
-    required this.dueDate,
-    this.isCompleted = false,
-  });
-
-  String get formattedTime {
-    final hour = dueDate.hour.toString().padLeft(2, '0');
-    final minute = dueDate.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
-}
-
-class Exam {
-  final String module;
-  final DateTime date;
-  bool isCompleted;
-
-  Exam({
-    required this.module,
-    required this.date,
-    this.isCompleted = false,
-  });
-
-  String get formattedTime {
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
   }
 }
